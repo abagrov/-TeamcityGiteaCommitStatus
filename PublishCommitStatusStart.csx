@@ -80,7 +80,7 @@ var log = "";
 try
 {
     var resp = await client.PostAsJsonAsync(endPoint, status);
-    log = $"End {resp.StatusCode} to {resp.RequestMessage.RequestUri}";
+    log = $"Got status code {resp.StatusCode}. Target URL: {resp.RequestMessage.RequestUri}";
     if (!resp.IsSuccessStatusCode)
     {
         var err = await resp.Content.ReadAsStringAsync();
