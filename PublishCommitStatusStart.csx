@@ -1,18 +1,19 @@
-﻿#r "nuget:System.Text.Json"
+#r "nuget:System.Text.Json"
 #r "nuget:System.Net.Http"
 #r "nuget:System.Net.Http.Json"
 
 /*
- * Args[0] - env.GITEA_TOKEN_COMMIT_STATUS%
+ * Args[0] - env.GITEA_TOKEN_COMMIT_STATUS
  * Args[1] - teamcity.serverUrl
- * Args[2] - owner
- * Args[3] - repo
- * Args[4] - sha
- * Args[5] - env.TEAMCITY_PROJECT_NAME
- * Args[6] - env.TEAMCITY_BUILDCONF_NAME
- * Args[7] - teamcity.build.triggeredBy
- * Args[8] - system.teamcity.buildType.id
- * Args[9] - teamcity.build.id
+ * Args[2] - Gitea server url
+ * Args[3] - owner of repo where commit status will be posted
+ * Args[4] - repo where commit status will be posted
+ * Args[5] - sha of commit
+ * Args[6] - env.TEAMCITY_PROJECT_NAME
+ * Args[7] - env.TEAMCITY_BUILDCONF_NAME
+ * Args[8] - teamcity.build.triggeredBy
+ * Args[9] - system.teamcity.buildType.id
+ * Args[10] - teamcity.build.id
  */
 
 using System;
@@ -47,29 +48,47 @@ public class CommitStatus
 //}
 
 var token = Args[0];
+var teamcityUrl = Args[1];
+var giteaUrl = Args[2];
+
+if (!giteaUrl.EndsWith("/")) giteaUrl += "/";
 var client = new HttpClient();
-client.BaseAddress = new Uri(new Uri(Args[1]).GetLeftPart(UriPartial.Authority));
-//WriteLine(client.BaseAddress);
+client.BaseAddress = new Uri(giteaUrl);
+WriteLine(client.BaseAddress);
 client.DefaultRequestHeaders.Add("Authorization", $"token {token}");
 
-var owner = Args[2];
-var repo = Args[3];
-var sha = Args[4];
+var owner = Args[3];
+var repo = Args[4];
+var sha = Args[5];
+var teamcityProjectName = Args[6];
+var teamcityBuildName = Args[7];
+var teamcityTriggerBy = Args[8];
+var teamcityBuildTypeId = Args[9];
+var teamcityBuildId = Args[10];
 
-var endPoint = $"/gitea/api/v1/repos/{HttpUtility.UrlEncode(owner)}/{HttpUtility.UrlEncode(repo)}/statuses/{HttpUtility.UrlEncode(sha)}";
+var endPoint = $"api/v1/repos/{HttpUtility.UrlEncode(owner)}/{HttpUtility.UrlEncode(repo)}/statuses/{HttpUtility.UrlEncode(sha)}";
 var status = new CommitStatus
 {
-    Context = $"{Args[5]}.{Args[6]}",
-    Description = $"\n\nStarted by {Args[7]} at {DateTime.Now.ToString("G")}",
+    Context = $"{teamcityProjectName}.{teamcityBuildName}",
+    Description = $"\n\nStarted by {teamcityTriggerBy} at {DateTime.Now.ToString("G")}",
     State = "pending",
-    TargetUrl = $"{Args[1]}/buildConfiguration/{Args[8]}/{Args[9]}"
+    TargetUrl = $"{teamcityUrl}/buildConfiguration/{teamcityBuildTypeId}/{teamcityBuildId}"
 };
 WriteLine($"Start post commit status");
 //WriteLine(status.ToString());
-var resp = await client.PostAsJsonAsync(endPoint, status);
-WriteLine($"End {resp.StatusCode} to ${resp.RequestMessage.RequestUri}");
-if (!resp.IsSuccessStatusCode)
+var log = "";
+try
 {
-    var err = await resp.Content.ReadAsStringAsync();
-    WriteLine($"Error: {err}");
+    var resp = await client.PostAsJsonAsync(endPoint, status);
+    log = $"End {resp.StatusCode} to {resp.RequestMessage.RequestUri}";
+    if (!resp.IsSuccessStatusCode)
+    {
+        var err = await resp.Content.ReadAsStringAsync();
+        throw new HttpRequestException($"{log}\n{err}");
+    }
 }
+finally
+{
+    client.Dispose();
+}
+WriteLine(log);
